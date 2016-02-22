@@ -1,0 +1,97 @@
+﻿<style type="text/css">
+    * {
+        margin: 0;
+        padding: 0;
+    }
+</style>
+<canvas id="canv"></canvas>
+<script src="collada.js"></script>
+<script src="stats.js">
+</script>
+<script src="gl-matrix-min.js"></script>
+<script src="kelios.js"></script>
+<script>
+var gl = new kelios("canv",{anisotropic:0});
+var camera = gl.createCamera([0,2,7], [0,0,0], { type: "perspective", aspect: 0, angle:60, nearPlane: 0.01, farPlane: 100 });
+var scene = gl.createScene();
+scene.addCamera("testCamera1", camera);
+var light = gl.createLight("direction", { position: [0, 0,0], direction: [0,45,60], color: [1, 1, 1], emission: 1 },
+{
+    enable: true,
+    size: 2048,
+    textureType: 0,
+    blur:true,
+    blurScale: 5,
+    bias:0.02,
+    split: 2,
+    camera: camera,
+    koef: 0.8,
+    div:3
+});
+scene.addLight(light);
+var p = [], elementName = [];
+var mat1 = gl.createMaterial([
+    { type: "shader.diffuse", value1: [1, 1, 1,1], value2: 0.5, id: 0 },
+    { type: "out.out", input: 0, id: 1 }
+]);
+var plane1 = gl.createElement({vertex:gl.plane.vertex,index:gl.plane.index,normal:gl.plane.normal}, []);
+var mat2 = gl.createMaterial([
+    { type: "texture.texture", value: "lordTextures/tex_specular_2048.jpg", id: 0 },
+    { type: "texture.texture", value: "lordTextures/tex_glossiness_2048.jpg", id: 1 },
+    { type: "color.color", value: [-0.1,0,0, 1], id: 2 },
+    { type: "color.sum", input1: 1, input2: 2, id: 3 },
+    { type: "texture.texture", value: "lordTextures/diffuse_2048.jpg", id: 4},
+    { type: "texture.texture", value: "lordTextures/tex_normal_d_2048.png", id: 5 },
+    { type: "vector.normalMap", input: 5, value: 1.8, id: 6 },
+    { type: "shader.diffuse", input1: 4, value2: 0.0, normal:6, id: 7 },
+    { type: "shader.specular", input1: 0, input2: 3,value3:0.6, id: 8 },
+    { type: "shader.sum", input1: 7, input2: 8, id: 9 },
+    { type: "texture.texture", value: "lordTextures/starlord_ao2_occlusion3.png", id: 10 },
+    { type: "shader.ao", input1: 10, input2:9, value:1, id: 11 },
+    { type: "shader.gammaCorrection", input: 11, value: 1.15, id: 12 },
+
+    { type: "texture.texture", value: "lordTextures/tex_emissive_2048.jpg", id: 13 },
+    { type: "shader.emission", input: 13, value: 1.5, id: 14 },
+
+    { type: "shader.sum", input1: 14, input2: 12, id: 15 },
+    { type: "out.out", input: 15, id: 16 }
+]);
+p.push(mat1);
+p.push(mat2);
+var stats = new Stats();
+stats.setMode(0); // 0: fps, 1: ms, 2: mb
+
+stats.domElement.style.position = 'absolute';
+stats.domElement.style.left = '0px';
+stats.domElement.style.top = '0px';
+
+document.body.appendChild(stats.domElement);
+
+gl.getJson("lordUV.json", function (data) {
+    //console.log(data);
+    var el = gl.createElement({
+        vertex: data.model.vertices[0].position.data,
+        index: data.model.meshes[0].indices,
+        normal: data.model.vertices[0].normal.data,
+        uv: data.model.vertices[0].texCoord0.data
+    }, []);
+    scene.addMesh("lordHead", el, { size: [0.0177, 0.0177, 0.0177], rotate: [0, -90, 0], position: [0, 0, 0] }, mat2);
+    scene.addMesh("plane1", plane1, { size: [10,10,10], rotate: [0, 0, 0], position: [0, -1.5, 0] }, mat1);
+    gl.assembly(scene, p);
+
+    var anim = function () {
+        stats.begin();
+        scene.rotateMesh("lordHead", [0, 0.3, 0]);
+        scene.draw();
+        stats.end();
+
+        requestAnimationFrame(anim);
+    }
+    anim();
+        var anim;
+    var o = true, d = 1024;
+    gl.keyboard.keyDown = function (key) {
+
+    }
+});
+</script>
