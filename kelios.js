@@ -50,7 +50,7 @@ function kelios(canvasId, param) {
 		ext.forEach(function (ex) {
 			if (ex == e) us = true;
 		});
-		if (us === false) alert("Extension '" + e + "' is not supported")
+		if (us === false) console.warn("Extension '" + e + "' is not supported")
 	})
 	ext.forEach(function (vl) {
 		switch (vl) {
@@ -99,15 +99,6 @@ function kelios(canvasId, param) {
 	this.width = w; this.height = h;
 	sys.wh = w / h;
 	sys.constructorWebglBuffer = gl.createBuffer().constructor;
-	window.onresize = function () {
-		w = window.innerWidth; h = window.innerHeight;
-		canvas.width = w; canvas.height = h;
-		alob(sys.cameras, function (sv) {
-			if (sv.type === 0) {
-				//
-			}
-		});
-	};
 	var mouse = {
 		click: function () { },
 		wheel: function () { },
@@ -582,6 +573,7 @@ function kelios(canvasId, param) {
 
 	}
 
+	this.v3 = sys.Vector3;
 	this.importCollada = function (colladaURL, callback) {
 		var xhr = new XMLHttpRequest();
 		xhr.open("GET", colladaURL, true);
@@ -646,7 +638,10 @@ function kelios(canvasId, param) {
 				}; break;
 				case "shader.diffuse": {
 					ret = {
-						shaderFunction: "vec4 diffuseParamether=vec4(0.0);\nvec4 diffuse(vec4 color,float koef, vec3 lightPos, vec3 normal){return vec4(vec3(color*max(0.0,(dot(normal.xyz,lightPos.xyz)+koef)/(1.0+koef))),color.a);}\n",
+						shaderFunction: "vec4 diffuseParamether=vec4(0.0);\n\
+vec4 diffuse(vec4 color,float koef, vec3 lightPos, vec3 normal,float shadowCoef){\n\
+float cosTheta=clamp((dot(normal.xyz,lightPos.xyz)+koef)/(1.0+koef),0.0,1.0);\n\
+return vec4(vec3(color*cosTheta)*shadowCoef,color.a);}\n",
 						functionType: 1,
 						uniforms: {},
 						type: "vec4",
@@ -669,7 +664,7 @@ function kelios(canvasId, param) {
 					ret.uniforms["_u_DiffuseKoef_" + usable.shader.diffuse] = { value: node.value2, type: "float" };
 					koef = "_u_DiffuseKoef_" + usable.shader.diffuse;
 
-					ret.preLightCode = "	diffuseParamether+=diffuse("+ color +"," + koef + ",lightPos," + norm + ")*lightColor;\n";
+					ret.preLightCode = "diffuseParamether+=diffuse(" + color + "," + koef + ",lightPos," + norm + ",shadowCoef)*lightColor;\n";
 					usable.shader.diffuse++;
 				}; break;
 				case "color.color": {
@@ -749,14 +744,14 @@ function kelios(canvasId, param) {
 				}; break;
 				case "shader.specular": {
 					ret = {
-						shaderFunction: "vec4 specularParamether=vec4(0.0);\nvec4 specular(vec3 lightPos,vec3 normal,vec3 color,float glossy,float specular)\n\
+						shaderFunction: "vec4 specularParamether=vec4(0.0);\nvec4 specular(vec3 lightPos,vec3 normal,vec3 color,float glossy,float specular,float shadowCoef)\n\
 {\n\
 vec3 viewDirW = normalize(cameraPosition - absolutePosition.xyz);\n\
 vec3 h = normalize( lightPos + viewDirW );\n\
 float nh = max( dot( h, normal ), 0.0 );\n\
 float specPow = exp2((specular*glossy+0.000001) * 11.0);\n\
 float s = pow(nh, specPow) * (specPow + 2.0) / 8.0;\n\
-return vec4(color*s,1.0);\n\
+return vec4(color*s*shadowCoef,1.0);\n\
 }\n",
 						functionType: 1,
 						uniforms: {},
@@ -782,7 +777,7 @@ return vec4(color*s,1.0);\n\
 					if (node.normal) {
 						normal = nodes[node.normal].sys.code;
 					} else { normal = "vNormal";}
-					ret.preLightCode = "	specularParamether+=specular(lightPos," + normal + ".xyz," + color + "," + glossy + "," + "_u_specularParam_" + usable.shader.specular + ");\n";
+					ret.preLightCode = "	specularParamether+=specular(lightPos," + normal + ".xyz," + color + "," + glossy + "," + "_u_specularParam_" + usable.shader.specular + ", shadowCoef);\n";
 					usable.shader.specular++;
 				}; break;
 				case "vector.normalMap": {
@@ -834,7 +829,7 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 			f[i-1].fard = Ci(i, splitCount, nd, fd, koef);
 		}
 	}
-	sys.updateFrustumPoint = function (fr, center, view_dir) {
+	/*sys.updateFrustumPoint = function (fr, center, view_dir) {
 		var up = [0.0, 1.0, 0.0];
 		var right = sys.Vector3.cross(view_dir, up);
 		var fc = sys.Vector3.sum(center, sys.Vector3.mul(view_dir, fr.fard));
@@ -862,29 +857,20 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 		for (var i = 0; i < 8; i++) vCenter = sys.Vector3.sum(vCenter, fr.point[i]);
 		vCenter = sys.Vector3.div(vCenter, 8);
 		fr.center = vCenter;
-
-		var vCenter = [0, 0, 0];
-		for (var i = 0; i < 4; i++) vCenter = sys.Vector3.sum(vCenter, fr.point[i]);
-		vCenter = sys.Vector3.div(vCenter, 4);
-		fr.nearCenter = vCenter;
-
-		var vCenter = [0, 0, 0];
-		for (var i = 4; i < 8; i++) vCenter = sys.Vector3.sum(vCenter, fr.point[i]);
-		vCenter = sys.Vector3.div(vCenter, 4);
-		fr.farCenter = vCenter;
-
-	};
+	};*/
 	sys.odnorodToDecart = function (arr) { return [arr[0] / arr[3], arr[1] / arr[3], arr[2] / arr[3],]; }
 	this.createLight = function (type, param, shadowOption) {
 		var light = {};
 		switch (type) {
 			case "direction": {
 				var light = {
-					type: type, position: param.position, direction: sys.rotatePoint(param.direction,[0,1,0],[0,0,0]),
+					type: type, position: param.position, direction: sys.rotatePoint(param.direction, [0, 1, 0], [0, 0, 0]),
+					directionAngle:param.direction,
 					color: sys.Vector3.toVec4(sys.Vector3.mul(param.color || [1, 1, 1], param.emission || 1), 1.0),
 					update: function () { },
 					setColor: function (r, g, b) { light.color = [r, g, b, light.color[3]]; },
-					setEmission: function (a) { light.color = [light.color[0], light.color[1], light.color[2],a]; }
+					setEmission: function (a) { light.color = [light.color[0], light.color[1], light.color[2], a]; },
+					shadowOption: shadowOption
 				};
 				light.vector = light.direction;
 				light.normalizedVector = sys.Vector3.normalize(light.vector);
@@ -892,58 +878,6 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 					light.direction = sys.Vector3.sum(light.direction, [x, y, z]);
 					light.update();
 				};
-
-				if (shadowOption.enable === true) {
-					light.shadow = {enable:1, far_bound: [], splits: [], fbs: [],fbsBlur:[], resultMatrix: [], bias: shadowOption.bias||0.0027 }
-					for (var i = 0; i < shadowOption.split; i++) {
-						light.shadow.splits.push({ neard: 0, fard: 0, fov: shadowOption.camera.angle, ratio: sys.wh, point: [], center: [] });
-					};
-					sys.updateSplits(light.shadow.splits, shadowOption.camera.near, shadowOption.camera.far, i, shadowOption.koef);
-
-					var cam_pos = shadowOption.camera.position;
-					var view_dir = shadowOption.camera.direction;
-
-					for (var i = 0; i < shadowOption.split; i++) {
-						light.shadow.far_bound.push(sys.Matrix4.multMatrixAndVector(shadowOption.camera.matrix, [0, 0, -light.shadow.splits[i].fard, 1])[2]);
-						sys.updateFrustumPoint(light.shadow.splits[i], cam_pos, view_dir);
-
-						var type = "UNSIGNED_BYTE";
-						if (shadowOption.textureType && shadowOption.textureType === 1) type = "HALF_FLOAT";
-						if (shadowOption.textureType && shadowOption.textureType === 2) type = "FLOAT";
-						light.shadow.fbs.push(sys.framebuffer(sys.texture(shadowOption.size, shadowOption.size, type, "color"), true, false));
-						if (shadowOption.blur && shadowOption.blur==true) {
-							light.shadow.fbsBlur.push(sys.framebuffer(sys.texture(shadowOption.size, shadowOption.size, type, "color"), false, false));
-							light.shadow.blur = true;
-						}
-						light.shadow.splits[i].cameraPosition = sys.rotatePoint(param.direction, sys.Vector3.sum(light.shadow.splits[i].center, [0, 20, 0.0001]), light.shadow.splits[i].center);
-						light.shadow.splits[i].camera = sys.createCamera(light.shadow.splits[i].cameraPosition, light.shadow.splits[i].center, { type: "orthogonal", aspect: -1, width:1,height:1, nearPlane: 1, farPlane: 1 });
-
-						var minX = 0, minY = 0, minZ = 0, maxX = 0, maxY = 0, maxZ = 0, minZ = 0;
-						var transform0=[light.shadow.splits[i].point[0][0],light.shadow.splits[i].point[0][1],light.shadow.splits[i].point[0][2],1];
-						var trans0 = sys.Matrix4.multMatrixAndVector(light.shadow.splits[i].camera.CameraMatrix, transform0);
-						minX=trans0[0];maxX=trans0[0];
-						minY=trans0[1];maxY=trans0[1];
-						maxZ=trans0[2];
-						for (var iz=1; iz<8; iz++)
-						{
-							var transform = [light.shadow.splits[i].point[iz][0], light.shadow.splits[i].point[iz][1], light.shadow.splits[i].point[iz][2], 1];
-							var trans = sys.Matrix4.multMatrixAndVector(light.shadow.splits[i].camera.CameraMatrix, transform);
-
-							if (minX>trans[0]) minX=trans[0];
-							if (maxX<trans[0]) maxX=trans[0];
-							if (minY>trans[1]) minY=trans[1];
-							if (maxY<trans[1]) maxY=trans[1];
-							if (maxZ < trans[2]) maxZ = trans[2];
-						}
-						var d = shadowOption.div || 1;
-						var W = (Math.abs(maxX - minX)) / d;
-						var fd = light.shadow.splits[i].fard - light.shadow.splits[i].neard;
-						light.shadow.splits[i].camera.setProjectionMatrix(-W, W, -W, W,
-										(sys.Vector3.sizeVector(light.shadow.splits[i].cameraPosition) - fd),
-										(sys.Vector3.sizeVector(light.shadow.splits[i].cameraPosition) + fd));
-						_Concat(light.shadow.resultMatrix, light.shadow.splits[i].camera.resultMatrix);
-					}
-				}
 			}; break;
 			case "spot": { }; break;
 		}
@@ -952,8 +886,9 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 	this.createCamera = function (position, direction, opt) {
 		var camera =
 		{
-			position: position, CameraMatrix: sys.Matrix4.lookAtDir(position, direction, [0, 1, 0]),
-			direction: sys.Vector3.sum(direction,[0,0.00001,0.00001]),
+			position: position,
+			direction: sys.rotatePoint(direction, sys.Vector3.sum(position, [0, -1, 0]), position),
+			directionAngle:[sys.degToRad(direction[0]),sys.degToRad(direction[1]),sys.degToRad(direction[2])],
 			translatePosition: function (x, y, z) {
 				camera.position = sys.Vector3.sum(camera.position, [x, y, z]);
 				camera.direction = sys.Vector3.sum(camera.direction, [x, y, z]);
@@ -968,6 +903,11 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 				camera.resultMatrix = sys.Matrix4.mult(camera.CameraMatrix, camera.matrix);
 			}
 		};
+		if (Array.isArray(direction[0])) {
+			camera.directionAngle = [0, 0, 0];
+			camera.direction = direction[0];
+		}
+		camera.CameraMatrix = sys.Matrix4.lookAtDir(camera.position, camera.direction, [0, 1, 0]);
 		if (opt.type && opt.type == "orthogonal") {
 			var aspect;
 			if (opt.aspect == 0) { aspect = sys.wh; } else if (opt.aspect == -1) { aspect = 1; } else { aspect = opt.aspect; }
@@ -975,7 +915,7 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 			camera.type = 1;
 			camera.typeString = "orthogonal";
 			camera.resultMatrix = sys.Matrix4.mult(camera.CameraMatrix, camera.matrix);
-			camera.setProjectionMatrix = function (left,right,up,down, zMin, zMax) {
+			camera.setProjectionMatrix = function (left, right, up, down, zMin, zMax) {
 				camera.matrix = sys.Matrix4.get_ortho(left * aspect, right * aspect, up, down, zMin, zMax);
 				camera.rebuild();
 			}
@@ -985,9 +925,20 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 			camera.matrix = sys.Matrix4.get_projection(opt.angle || 60, aspect || sys.wh, opt.nearPlane || 0.1, opt.farPlane || 1000);
 			camera.typeString = "perspective";
 			camera.resultMatrix = sys.Matrix4.mult(camera.CameraMatrix, camera.matrix);
-			camera.angle =sys.degToRad( opt.angle || 60);
+			camera.angle = sys.degToRad(opt.angle || 60);
+			camera.angleInDeg = opt.angle || 60;
 			camera.near = opt.nearPlane || 0.1;
 			camera.far = opt.farPlane || 1000;
+			//camera.aspect = aspect;
+			camera.setProjectionMatrix = function (angle, aspect0, near, far) {
+				camera.matrix = sys.Matrix4.get_projection(angle, aspect0, near, far);
+				camera.angle = sys.degToRad(angle);
+				camera.angleInDeg = angle;
+				camera.near = near;
+				camera.far = far;
+				camera.aspect = aspect0;
+				camera.rebuild();
+			}
 		}
 		return camera;
 	};
@@ -1005,8 +956,24 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 			position: par.position || [0, 0, 0], size: par.size || [1, 1, 1], rotate: par.rotate || [0, 0, 0]
 		};
 	};
-	this.createScene = function () {
+	this.HARD = 18;
+	this.PCF = 19;
+	this.VSM = 20;
+	this.BLURED_VSM = 21;
+	var tthis = this;
+	this.createScene = function (par) {
 		var scene = {};
+		var p;
+		if (par.shadowSetting) { p = par.shadowSetting; } else { p = {} }
+		scene.shadowSetting = {
+			type: p.type || "hard",
+			blurScale: p.blurScale || 3,
+			bitsPerChanel: p.bitsPerChanel || 2,
+			splitForDirectionLight: p.splitForDirectionLight || 1,
+			encodeTexture: p.encodeTexture || false,
+			IOQWAIIS: p.IOQWAIIS || false,
+			devideTexture: p.devideTexture || true
+		};
 		scene.lightCount = 0;
 		scene.meshes = {};
 		scene.lights = { direction: [], spot: [] };
@@ -1059,42 +1026,81 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 			}
 		};
 		scene.addCamera = function (name, camera) {
-			scene.camera = cloneObject(camera);
+			scene.camera = camera;
 			var camera = scene.camera;
 			camera.name = name;
-			camera.update = function () {
 
+			if (par.sceneParam) {
+				if (par.sceneParam.autoResize && par.sceneParam.autoResize === true) {
+					window.onresize = function () {
+						tthis.width = window.innerWidth; tthis.height = window.innerHeight;
+						canvas.width = tthis.width; canvas.height = tthis.height;
+						camera.setProjectionMatrix(camera.angleInDeg, tthis.width / tthis.height, scene.camera.near, scene.camera.far);
+						scene.sceneUniforms[0] = { name: "CameraMat", value: scene.camera, link: "resultMatrix", type: "mat4" };
+					}; 
+				}
 			}
 		};
 		scene.draw = function (viewPort) {
 			gl.enable(gl.DEPTH_TEST);
-			sys.useProgram(scene._shaders["ShadowShader"]);
-			scene.lights.direction.forEach(function (light) {
-				//ShadowShader
-				if (light.shadow&&light.shadow.enable===1) {
-					light.shadow.splits.forEach(function (split, number) {
-						light.shadow.fbs[number].bind();
-						sys.clear([1, 1, 1, 1], "cd");
-						sys.render(scene._shaders["ShadowShader"], null, scene,
-							[{ name: "position", value: "vertexBuffer", size: 3 }, { value: "indexBuffer" }],
-							{
-								scene: [{ name: "CameraMat", value: split.camera, link:"resultMatrix", type: "mat4" }],
-								element: [{ name: "MoveMat", value: "Matrix", type: "mat4" }],
-							},
-							[0, 0, light.shadow.fbs[number].size[0], light.shadow.fbs[number].size[1]]);
-						light.shadow.fbs[number].unbind();
-					});
-				}
-			});
-			sys.useProgram(sys.blurShadow);
-			scene.lights.direction.forEach(function (light) {
+			if (scene.shadowSetting.type === 21) {
+				sys.useProgram(scene._shaders["ShadowShader"]);
+				scene.lights.direction.forEach(function (light) {
+					//ShadowShader
+					if (light.shadow && light.shadow.enable === 1) {
+						light.shadow.splits.forEach(function (split, number) {
+							light.shadow.fbsBlurX[number].bind();
+							sys.clear([0, 0, 0, 0], "cd");
+							sys.render(scene._shaders["ShadowShader"], null, scene,
+								[{ name: "position", value: "vertexBuffer", size: 3 }, { value: "indexBuffer" }],
+								{
+									scene: [{ name: "CameraMat", value: split.camera, link: "resultMatrix", type: "mat4" }],
+									element: [{ name: "MoveMat", value: "Matrix", type: "mat4" }],
+								},
+								[0, 0, light.shadow.fbsBlurX[number].size[0], light.shadow.fbsBlurX[number].size[1]]);
+							light.shadow.fbsBlurX[number].unbind();
+						});
+					}
+				});
+				sys.useProgram(scene.blurShadow);
+				scene.lights.direction.forEach(function (light) {
+					//ShadowShader
+					if (light.shadow && light.shadow.enable === 1) {
+						light.shadow.splits.forEach(function (split, number) {
+							sys.postProcessFunction(scene.blurShadow, light.shadow.fbsBlurX[number], [1, 0], light.shadow.fbsBlurY[number]);
+							sys.postProcessFunction(scene.blurShadow, light.shadow.fbsBlurY[number], [0, 1], light.shadow.fbs[number]);
+						});
+					}
+				});
+			} else {
+				sys.useProgram(scene._shaders["ShadowShader"]);
+				scene.lights.direction.forEach(function (light) {
+					//ShadowShader
+					if (light.shadow && light.shadow.enable === 1) {
+						light.shadow.splits.forEach(function (split, number) {
+							light.shadow.fbs[number].bind();
+							sys.clear([0, 0, 0, 0], "cd");
+							sys.render(scene._shaders["ShadowShader"], null, scene,
+								[{ name: "position", value: "vertexBuffer", size: 3 }, { value: "indexBuffer" }],
+								{
+									scene: [{ name: "CameraMat", value: split.camera, link: "resultMatrix", type: "mat4" }],
+									element: [{ name: "MoveMat", value: "Matrix", type: "mat4" }],
+								},
+								[0, 0, light.shadow.fbs[number].size[0], light.shadow.fbs[number].size[1]]);
+							light.shadow.fbs[number].unbind();
+						});
+					}
+				});
+			}
+			//if(scene.shadowSetting.blur)
+/*			scene.lights.direction.forEach(function (light) {
 				if (light.shadow && light.shadow.enable === 1 && light.shadow.blur == true) {
 					light.shadow.splits.forEach(function (split, number) {
 						sys.postProcessFunction(sys.blurShadow, light.shadow.fbs[number], [1, 0], light.shadow.fbsBlur[number]);
 						sys.postProcessFunction(sys.blurShadow, light.shadow.fbsBlur[number], [0, 1], light.shadow.fbs[number]);
 					});
 				}
-			});	
+			});*/
 			sys.clear([0.65, 0.65, 0.65, 1], "cd");
 			scene._allMaterials.forEach(function (mater, num) {
 				sys.useProgram(scene._shaders["Shader_" + num]);
@@ -1107,10 +1113,10 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 					dynamic: [["material", "uniforms"]],
 					textures: [["material", "textures"]]
 				},
-				[0, 0, w, h]);
+				[0, 0, tthis.width,tthis.height]);
 			});	
 			/*sys.useProgram(sys.resultShader);
-			sys.postProcessFunctionDraw(sys.resultShader, light.shadow.fbs[0], [0, 0], [512, 512]);*/
+			sys.postProcessFunctionDraw(sys.resultShader, scene.lights.direction[0].shadow.fbs[0], [0, 0], [512, 512]);*/
 		};
 		scene.rotateMesh = function (name, axis) {
 			var m = scene.meshes[name];
@@ -1123,28 +1129,170 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 			sys.Matrix4.rotateZ(m.NormalMatrix, axis[2]);
 		};
 		scene.addLight = function (light) {
+		//console.log(light)
 			if (light.type === "direction") {
 				scene.lights.direction.push(light);
+				var shadowSetting = scene.shadowSetting;
+				//console.log(shadowSetting)
 				var light = scene.lights.direction[scene.lights.direction.length - 1];
+				if (light.shadowOption && light.shadowOption.enable === true) {
+					light.shadow = { enable: 1, far_bound: [], splits: [], fbs: [], fbsBlurX: [], fbsBlurY: [], resultMatrix: [], bias: light.shadowOption.bias || 0.0027, normalBias: light.shadowOption.normalBias || 0.05 }
+					for (var i = 0; i < shadowSetting.splitForDirectionLight; i++) {
+						light.shadow.splits.push({ neard: 0, fard: 0, });
+					};
+					sys.updateSplits(light.shadow.splits, light.shadowOption.camera.near, light.shadowOption.distantion, i, light.shadowOption.koef);
+					//console.log(light.shadow.splits[0].fard)
+					var cam_pos = light.shadowOption.camera.position;
+					var view_dir = sys.Vector3.normalize(light.shadowOption.camera.direction);
+
+					for (var i = 0; i < shadowSetting.splitForDirectionLight; i++) {
+						//light.shadow.far_bound.push(light.shadow.splits[i].fard);
+						light.shadow.far_bound.push(sys.Matrix4.multMatrixAndVector(light.shadowOption.camera.matrix, [0, 0, -light.shadow.splits[i].fard, 1])[2]);
+						var shadowSize = light.shadowOption.size;
+
+						if (shadowSetting.IOQWAIIS === true) {
+							shadowSize = light.shadowOption.size / Math.pow(2, i);
+						}
+						var type = "UNSIGNED_BYTE";
+						var rr = "RGBA";
+						if (shadowSetting.bitsPerChanel === 4) { type = "HALF_FLOAT";};
+						if (shadowSetting.bitsPerChanel === 8) type = "FLOAT";
+						if (shadowSetting.type === 21) {
+							var dr = 1;
+							if (shadowSetting.devideTexture === true) { dr = 2; }
+							light.shadow.fbsBlurX.push(sys.framebuffer(sys.texture(shadowSize, shadowSize, type, rr), true, false));
+							light.shadow.fbsBlurY.push(sys.framebuffer(sys.texture(shadowSize / dr, shadowSize / dr, type, rr), false, false));
+							light.shadow.fbs.push(sys.framebuffer(sys.texture(shadowSize / dr, shadowSize / dr, type, rr), false, false));
+							light.shadow.blur = true;
+						} else {
+							light.shadow.fbs.push(sys.framebuffer(sys.texture(shadowSize, shadowSize, type, rr), true, false));
+						}
+						light.shadow.splits[i].cameraPosition = sys.rotatePoint(light.directionAngle, sys.Vector3.sum(cam_pos, [0, 1, 0.0001]), cam_pos);
+						light.shadow.splits[i].camera = sys.createCamera(light.shadow.splits[i].cameraPosition, [cam_pos], { type: "orthogonal", aspect: -1, width: 1, height: 1, nearPlane: 1, farPlane: 1 });
+						//console.log(light.shadow.splits[i].cameraPosition, [cam_pos])
+						var d = light.shadowOption.ds || 1;
+						var fd = light.shadow.splits[i].fard - light.shadow.splits[i].neard;
+						light.shadow.splits[i].camera.setProjectionMatrix(-fd * d, fd * d, -fd * d, fd * d,
+										sys.Vector3.sizeVector(cam_pos) - fd * 2,
+										sys.Vector3.sizeVector(cam_pos) + fd * 2);
+						//light.shadow.splits[i].camera.setProjectionMatrix(-10,10, -10,10,-50,50);	 
+						//console.log((sys.Vector3.sizeVector(cam_pos) - fd),(sys.Vector3.sizeVector(cam_pos) + fd))
+						_Concat(light.shadow.resultMatrix, light.shadow.splits[i].camera.resultMatrix);	
+					}
+				}
 				var lightForRender = scene.lightForDefaultRender.direction;
 				_Concat(lightForRender.color_, light.color);
 				_Concat(lightForRender.vector_, light.vector);
 				_Concat(lightForRender.normalizedVector_, light.normalizedVector);
 			};
 		};
+		scene.updateShadowSetting = function (newSetting) {
+			var p = newSetting;
+			scene.shadowSetting = {
+				type: p.type || "hard",
+				blurScale: p.blurScale || 3,
+				bitsPerChanel: p.bitsPerChanel || 2,
+				splitForDirectionLight: p.splitForDirectionLight || 1,
+				encodeTexture: p.encodeTexture || false,
+				IOQWAIIS: p.IOQWAIIS || false,
+				devideTexture: p.devideTexture || true
+			};
+			if (typeof scene.shadowSetting.encodeTexture == "string") {
+				if (scene.shadowSetting.encodeTexture == "true") {
+					scene.shadowSetting.encodeTexture = true;
+				} else {
+					scene.shadowSetting.encodeTexture = false;
+				}
+			}
+		};
 		scene.updateLights = function () {
 			scene.lightForDefaultRender.direction = {
 				vector_: [],
 				normalizedVector_: [],
 				color_: [],
-			}; 
+			};
 			scene.lights.direction.forEach(function (light) {
 				var lightForRender = scene.lightForDefaultRender.direction;
 				_Concat(lightForRender.color_, light.color);
 				_Concat(lightForRender.vector_, light.vector);
 				_Concat(lightForRender.normalizedVector_, light.normalizedVector);
 			});
+			//...
 			scene.sceneUniforms[3] = { name: "directionLight.color", value: scene.lightForDefaultRender.direction, link: "color_", type: "vec4" };
+			//scene.updateShadow();
+		}
+		scene.updateShadow = function () {
+			var shadowSetting = scene.shadowSetting;
+			scene.lights.direction.forEach(function (light) {
+				if (light.shadowOption && light.shadowOption.enable === true) {
+					light.shadow.fbs.forEach(function (tex) {
+						gl.deleteTexture(tex.texture);
+						gl.deleteFramebuffer(tex.fb);
+						if (tex.renderBuffer) {
+							gl.deleteRenderbuffer(tex.renderBuffer);
+						}
+					});
+					light.shadow.fbsBlurX.forEach(function (tex) {
+						gl.deleteTexture(tex.texture);
+						gl.deleteFramebuffer(tex.fb);
+						if (tex.renderBuffer) {
+							gl.deleteRenderbuffer(tex.renderBuffer);
+						}
+					});
+					light.shadow.fbsBlurY.forEach(function (tex) {
+						gl.deleteTexture(tex.texture);
+						gl.deleteFramebuffer(tex.fb);
+						if (tex.renderBuffer) {
+							gl.deleteRenderbuffer(tex.renderBuffer);
+						}
+					});
+					light.shadow = { enable: 1, far_bound: [], splits: [], fbs: [], fbsBlurX: [], fbsBlurY: [], resultMatrix: [], bias: light.shadowOption.bias || 0.0027, normalBias: light.shadowOption.normalBias || 0.05 }
+					for (var i = 0; i < shadowSetting.splitForDirectionLight; i++) {
+						light.shadow.splits.push({ neard: 0, fard: 0, });
+					};
+					sys.updateSplits(light.shadow.splits, light.shadowOption.camera.near, light.shadowOption.distantion, i, light.shadowOption.koef);
+					//console.log(light.shadow.splits[0].fard)
+					var cam_pos = light.shadowOption.camera.position;
+					var view_dir = sys.Vector3.normalize(light.shadowOption.camera.direction);
+
+					for (var i = 0; i < shadowSetting.splitForDirectionLight; i++) {
+						//light.shadow.far_bound.push(light.shadow.splits[i].fard);
+						light.shadow.far_bound.push(sys.Matrix4.multMatrixAndVector(light.shadowOption.camera.matrix, [0, 0, -light.shadow.splits[i].fard, 1])[2]);
+						var shadowSize = light.shadowOption.size;
+
+						if (shadowSetting.IOQWAIIS === true) {
+							shadowSize = light.shadowOption.size / Math.pow(2, i);
+						}
+						var type = "UNSIGNED_BYTE";
+						var rr = "RGBA";
+						if (shadowSetting.bitsPerChanel == 4) type = "HALF_FLOAT";
+						if (shadowSetting.bitsPerChanel == 8) type = "FLOAT";
+						if (shadowSetting.type === 21) {
+							var dr = 1;
+							if (shadowSetting.devideTexture === true) { dr = 2; }
+							light.shadow.fbsBlurX.push(sys.framebuffer(sys.texture(shadowSize, shadowSize, type, rr), true, false));
+							light.shadow.fbsBlurY.push(sys.framebuffer(sys.texture(shadowSize / dr, shadowSize / dr, type, rr), false, false));
+							light.shadow.fbs.push(sys.framebuffer(sys.texture(shadowSize / dr, shadowSize / dr, type, rr), false, false));
+							light.shadow.blur = true;
+						} else {
+							light.shadow.fbs.push(sys.framebuffer(sys.texture(shadowSize, shadowSize, type, rr), true, false));
+						}
+						light.shadow.splits[i].cameraPosition = sys.rotatePoint(light.directionAngle, sys.Vector3.sum(cam_pos, [0, 1, 0.0001]), cam_pos);
+						light.shadow.splits[i].camera = sys.createCamera(light.shadow.splits[i].cameraPosition, [cam_pos], { type: "orthogonal", aspect: -1, width: 1, height: 1, nearPlane: 1, farPlane: 1 });
+						//console.log(light.shadow.splits[i].cameraPosition, [cam_pos])
+						var d = light.shadowOption.ds || 1;
+						var fd = light.shadow.splits[i].fard - light.shadow.splits[i].neard;
+						light.shadow.splits[i].camera.setProjectionMatrix(-fd * d, fd * d, -fd * d, fd * d,
+										sys.Vector3.sizeVector(cam_pos) - fd * 2,
+										sys.Vector3.sizeVector(cam_pos) + fd * 2);
+						//light.shadow.splits[i].camera.setProjectionMatrix(-10,10, -10,10,-50,50);	 
+						//console.log((sys.Vector3.sizeVector(cam_pos) - fd),(sys.Vector3.sizeVector(cam_pos) + fd))
+						_Concat(light.shadow.resultMatrix, light.shadow.splits[i].camera.resultMatrix);
+					}
+				}
+			});
+			//light.shadow = {};
+			//scene.sceneUniforms[3] = { name: "directionLight.color", value: scene.lightForDefaultRender.direction, link: "color_", type: "vec4" };
 		}
 		return scene;
 	}
@@ -1182,13 +1330,12 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 		if (uniforms.scene) {
 			alob(uniforms.scene, function (a) {
 				sys.setUniform(program.uniforms[a.name], a.value[a.link], a.type);
-				//console.log(a.name, a.value)
+				//console.log(a.name, a.value[a.link], a.type)
 			});
 		};
 		if (uniforms.globalTextures) {
 			uniforms.globalTextures.forEach(function (texture) {
 				sys.activeTexture(texture.texture.texture, program.uniforms[texture.uniform], texture.number);
-				//console.warn(program.uniforms[texture.uniform])
 			});
 		}
 		alob(scene.meshes, function (m) {
@@ -1257,12 +1404,12 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 		if (sys.anisotropic) {
 			gl.texParameterf(gl.TEXTURE_2D, sys.anisotropic.filter.TEXTURE_MAX_ANISOTROPY_EXT, sys.anisotropic.param);
 		}
-		if (format == "color") {
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, typ, null);
-			texture.type = "RGBA";
-		} else {
+		if (format == "depth") {
 			gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT, width, height, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, null);
 			texture.type = "DEPTH_COMPONENT";
+		} else {
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl[format], typ, null);
+			texture.type = format;
 		}
 		gl.bindTexture(gl.TEXTURE_2D, null);
 		texture.size = [width, height];
@@ -1270,6 +1417,7 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 	};
 	var fbTexNum = 0;
 	sys.framebuffer = function (colorTexture, useRenderBuffer, depthTexture) {
+		var renderBuffer = undefined;
 		var framebuffer = gl.createFramebuffer();
 		gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
 		if (!Array.isArray(colorTexture)) {
@@ -1283,6 +1431,7 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 						gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
 						gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, colorTexture.size[0], colorTexture.size[1]);
 						gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+						renderBuffer = rb;
 					}
 				}
 			}
@@ -1298,6 +1447,7 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 				gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
 				gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, colorTexture[0].size[0], colorTexture[0].size[1]);
 				gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+				renderBuffer = rb;
 			}
 		}
 		gl.bindTexture(gl.TEXTURE_2D, null);
@@ -1312,7 +1462,7 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			}, unbindTexture: function () {
 				gl.bindTexture(gl.TEXTURE_2D, null);
-			}
+			},renderBuffer:renderBuffer
 		};
 	};
 	sys.createdTexturesURL = []; sys.createdTextures = [];
@@ -1404,8 +1554,7 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 	sys.drawElement = function (length) {
 		gl.drawElements(gl.TRIANGLES, length, gl.UNSIGNED_INT, 0);
 	};
-	sys.uniformList =
-	{
+	sys.uniformList ={
 		vec4: function (u, v) { gl.uniform4fv(u, v) },
 		mat4: function (u, v) { gl.uniformMatrix4fv(u, false, v) },
 		vec3: function (u, v) { gl.uniform3fv(u, v) },
@@ -1430,6 +1579,14 @@ vec4 perturb_normal(vec4 samp,vec3 N, vec3 V,float koef)\n\
 		return true;
 	};
 	this.assembly = function (scene, materials) {
+		if (scene._shaders) {
+			alob(scene._shaders, function (a, n, t) {
+				var s = gl.getAttachedShaders(a.program);
+				gl.deleteShader(s[0]);
+				gl.deleteShader(s[1]);
+				gl.deleteProgram(a.program);
+			})
+		}
 		scene._shaders = {};
 		scene._allMaterials = cloneObject(materials);
 		var vs = "attribute vec3 position,normal;attribute vec2 uv;\n\
@@ -1440,7 +1597,6 @@ void main(){\n\
 	vNormal=normalize(vec3(NormalMat*vec4(normal,1.0)));\n\
 	uvs=uv;\n\
 }";
-
 		var u = cloneObject(sys.shaderMaterialFunc),
 		usable = {};
 		alob(u, function (m, n, a) {
@@ -1469,33 +1625,60 @@ void main(){\n\
 		scene.allLightCount = 0;
 		var codeUniformsShadowMap = "";
 
+		var shadowMapSplit = "";
+		//console.log(scene)
 		if (scene.lights.direction.length > 0) {
-			lightConstants += "\n#define DIRECTION_LIGHT " + (scene.lights.direction.length) + "\n";
+			var splitCount = scene.shadowSetting.splitForDirectionLight;
+
+			lightConstants += "\n#define DIRECTION_LIGHT " + scene.lights.direction.length + "\n";
+			lightConstants += "\n#define LIGHT_SPLIT_COUNT " + splitCount + "\n";
 			alluniforms.push("shadowMapMatrix_");
+			alluniforms.push("shadowMapFar_d_");
 			alluniforms.push("shadowMapBias_");
+			alluniforms.push("shadowMapNormalBias_");
+
+			shadowMapSplit += "\n\t\tif(dv < shadowMapFar_d_[i*" + splitCount + "+0])shadowCoef*=computeShadow(shadowMapMatrix_[i*" + splitCount + "+0],shadowMap_[i*" + splitCount + "+0],shadowMapBias_[i],shadowMapNormalBias_[i],0.05,lightPos);\n";
+			for (var i = 1; i < splitCount - 1; i++) {
+				shadowMapSplit += "\t\telse if(dv < shadowMapFar_d_[i*" + splitCount + "+"+ i +"])shadowCoef*=computeShadow(shadowMapMatrix_[i*" + splitCount + "+" + i + "],shadowMap_[i*" + splitCount + "+" + i + "],shadowMapBias_[i],shadowMapNormalBias_[i],0.05,lightPos);\n";
+			}
+			if (splitCount >= 2) {
+				shadowMapSplit += "\t\telse shadowCoef*=computeShadow(shadowMapMatrix_[i*" + splitCount + "+" + i + "],shadowMap_[i*" + splitCount + "+" + i + "],shadowMapBias_[i],shadowMapNormalBias_[i],0.05,lightPos);\n";
+			}
+
+			var shadowMatrixes = [],shadowFard=[], shadowBiases=[], shadowNormalBiases=[], shadowEnables=[];
 			scene.lights.direction.forEach(function (light) {
 				if (light.shadow&&light.shadow.enable===1) {
-					var r = scene.allShadowTextures + (scene.allLightCount - scene.allShadowTextures);
-
-					for (var i = 0; i < light.shadow.splits.length; i++) {
-						alluniforms.push("shadowMap_[" + (r * light.shadow.splits.length + i) + "]");
-						scene.globalTextures.push({ uniform: "shadowMap_[" + (r * light.shadow.splits.length + i) + "]", number: r * light.shadow.splits.length + i, texture: light.shadow.fbs[i] });
+					var r = scene.allShadowTextures * splitCount;
+					for (var i = 0; i < splitCount; i++) {
+						alluniforms.push("shadowMap_[" + (r + i) + "]");
+						scene.globalTextures.push({ uniform: "shadowMap_[" + (r + i) + "]", number: r + i, texture: light.shadow.fbs[i] });
 					}
+					_Concat(shadowMatrixes, light.shadow.resultMatrix);
+					_Concat(shadowFard, light.shadow.far_bound);
+					_Concat(shadowBiases, [light.shadow.bias]);
+					_Concat(shadowNormalBiases, [light.shadow.normalBias]);
+					_Concat(shadowEnables, [light.shadow.enable]);
+
 					scene.allShadowTextures++;
 				}
 			});
-			codeUniformsShadowMap += "uniform sampler2D shadowMap_[" + (scene.allShadowTextures * light.shadow.splits.length) + "];";
-			codeUniformsShadowMap += "uniform mat4 shadowMapMatrix_[" + (scene.allShadowTextures * light.shadow.splits.length) + "];\n";
-			codeUniformsShadowMap += "uniform float shadowMapBias_[" + (scene.allShadowTextures) + "];\n";
-			codeUniformsShadowMap += "uniform int shadowMapEnable_[" + (scene.allShadowTextures) + "];\n";
+			scene.sceneUniforms.push({ name: "shadowMapMatrix_", value: { d: shadowMatrixes }, link: "d", type: "mat4" });
+			scene.sceneUniforms.push({ name: "shadowMapFar_d_", value: { d: shadowFard }, link: "d", type: "floatv" });
+			scene.sceneUniforms.push({ name: "shadowMapBias_", value: { d: shadowBiases }, link: "d", type: "floatv" });
+			scene.sceneUniforms.push({ name: "shadowMapNormalBias_", value: { d: shadowNormalBiases }, link: "d", type: "floatv" });
+			scene.sceneUniforms.push({ name: "shadowMapEnable_", value: { d: shadowEnables }, link: "d", type: "intv" });
 
-			scene.sceneUniforms.push({ name: "shadowMapMatrix_", value: light.shadow,link:"resultMatrix", type: "mat4" });
-			scene.sceneUniforms.push({ name: "shadowMapBias_", value: light.shadow,link:"bias", type: "float" });
-			scene.sceneUniforms.push({ name: "shadowMapEnable_", value: light.shadow, link: "enable", type: "int" });
+
+			codeUniformsShadowMap += "uniform sampler2D shadowMap_[" + (scene.allShadowTextures * splitCount) + "];";
+			codeUniformsShadowMap += "uniform mat4 shadowMapMatrix_[" + (scene.allShadowTextures * splitCount) + "];\n";
+			codeUniformsShadowMap += "uniform float shadowMapBias_[" + (scene.allShadowTextures) + "];\n";
+			codeUniformsShadowMap += "uniform float shadowMapNormalBias_[" + (scene.allShadowTextures) + "];\n";
+			codeUniformsShadowMap += "uniform int shadowMapEnable_[" + (scene.allShadowTextures) + "];\n";
+			codeUniformsShadowMap += "uniform float shadowMapFar_d_[" + (scene.allShadowTextures * splitCount) + "];\n";
 
 			scene.allLightCount++;
 		}
-		//console.log(alluniforms)
+		//console.log(scene.sceneUniforms)
 		var lightStructure = "\n\
 #ifdef DIRECTION_LIGHT\n\
 struct LightDirectionStruct_system\n\
@@ -1509,6 +1692,112 @@ struct LightDirectionStruct_system\n\
 	float bias[DIRECTION_LIGHT];\n\
 };uniform LightDirectionStruct_system directionLight;\
 \n#endif\n";
+
+		var so = scene.shadowSetting;
+		//console.log(so);
+		var shadow={ };
+		
+		var sfe = "";
+		switch (so.type) {
+			//computeShadow(mat4 projMat, sampler2D sm, float bias, float normalBias, float minValue, vec3 lightPos)...
+			case 18: { //hard
+				if (so.encodeTexture === true) {
+					shadow.shadowMapFunction = "gl_FragColor=vec4(packHalf(z),0,1.0);";
+					shadow.generalShaderFunction = "vec4 sam=texture2D(sm,uu.xy);if(uu.z>unpackHalf(sam.xy)+bias){return minValue;}return 1.0;";
+				} else {
+					shadow.shadowMapFunction = "gl_FragColor=vec4(z,0,0,1.0);";
+					shadow.generalShaderFunction = "vec4 sam=texture2D(sm,uu.xy);if(uu.z>sam.x+bias){return minValue;}return 1.0;";
+				}
+			}; break;
+			case 19: {//pcf
+				if (so.encodeTexture === true) {
+					shadow.shadowMapFunction = "gl_FragColor=vec4(packHalf(z),0,1.0);"
+					shadow.generalShaderFunction = "float col=0.0; vec3 color=vec3(0.0);\
+const float b=" + (so.blurScale.toString().split(".")[0]) + ".0;for(float x=-b;x<=b;x++)\
+{for(float y=-b;y<=b;y++){vec4 sam=texture2D(sm,uu.xy+vec2(1.0/2048.0)*vec2(x,y));\
+if(uu.z>unpackHalf(sam.xy)+bias){color+=minValue;}else{color+=1.0;}col++;}}return color.x/col;";
+				} else {
+					shadow.shadowMapFunction = "gl_FragColor=vec4(z,0,0,1.0);";
+					shadow.generalShaderFunction = "float col=0.0; vec3 color=vec3(0.0);\
+const float b=" + (so.blurScale.toString().split(".")[0]) + ".0;for(float x=-b;x<=b;x++)\
+{for(float y=-b;y<=b;y++){vec4 sam=texture2D(sm,uu.xy+vec2(1.0/2048.0)*vec2(x,y));\
+if(uu.z>sam.x+bias){color+=minValue;}else{color+=1.0;}col++;}}return color.x/col;";
+				}
+			}; break;
+			case 20: {//vsm
+				if (so.encodeTexture === true) {
+					shadow.shadowMapFunction = "float moment1 = z;float moment2 = moment1 * moment1;\
+float dx = dFdx(moment1);float dy = dFdy(moment1);gl_FragColor = vec4(packHalf(moment1),packHalf(moment2+0.25*(dx*dx+dy*dy)));"
+					shadow.generalShaderFunction = "vec4 sam=texture2D(sm,uu.xy);vec2 moments=vec2(unpackHalf(sam.xy),unpackHalf(sam.zw));\
+float p = smoothstep(uu.z-bias, uu.z, moments.x);\
+float variance = moments.y-moments.x * moments.x;\
+float d = uu.z-moments.x;\
+float p_max = linstep(0.2,1.0,variance/(variance+d*d));\
+return max(minValue,max(p, p_max));\
+";
+				} else {
+					shadow.shadowMapFunction = "float moment1 = z;float moment2 = moment1 * moment1;\
+float dx = dFdx(moment1);float dy = dFdy(moment1);gl_FragColor = vec4(moment1,moment2+0.25*(dx*dx+dy*dy),0,1);";
+					shadow.generalShaderFunction = "vec4 sam=texture2D(sm,uu.xy);vec2 moments=sam.xy;\
+float p = smoothstep(uu.z-bias, uu.z, moments.x);\
+float variance = moments.y-moments.x * moments.x;\
+float d = uu.z-moments.x;\
+float p_max = linstep(0.2,1.0,variance/(variance+d*d));\
+return max(minValue,max(p, p_max));\
+";
+				}
+
+			}; break;
+			case 21: {//bluredvsm
+				if (so.encodeTexture === true) {
+					shadow.shadowMapFunction = "float moment1 = z;float moment2 = moment1 * moment1;\
+float dx = dFdx(moment1);float dy = dFdy(moment1);gl_FragColor = vec4(packHalf(moment1),packHalf(moment2+0.25*(dx*dx+dy*dy)));";
+					shadow.generalShaderFunction = "vec4 sam=texture2D(sm,uu.xy);vec2 moments=vec2(unpackHalf(sam.xy),unpackHalf(sam.zw));\
+float p = smoothstep(uu.z-bias, uu.z, moments.x);\
+float variance = moments.y-moments.x * moments.x;\
+float d = uu.z-moments.x;\
+float p_max = linstep(0.2,1.0,variance/(variance+d*d));\
+return max(minValue,max(p, p_max));\
+";
+					var ffs = "#define INV_SQRT_2PI_X3 1.1968268412042980338198381798031\n\
+precision highp float;uniform sampler2D sampler;uniform vec2 direction,resolution;varying vec2 uvs;\
+float unpackHalf(vec2 color){return color.x + (color.y / 255.0);}vec2 packHalf(float depth){const vec2 bitOffset = vec2(1.0 / 255., 0.);\
+vec2 color = vec2(depth, fract(depth * 255.));return color - (color.yy * bitOffset);}const float r=" + so.blurScale + ".0;\
+void main(){\
+\
+float exp_value=-4.5/r/r;float sqrt_value=INV_SQRT_2PI_X3/r;float sum=0.0;\
+vec2 value=vec2(0.0);for(float x=1.0;x<=r;x++){float currentScale=exp(exp_value*x*x);sum+=currentScale;\
+vec2 dudv=direction/resolution*x;\
+vec4 tex1=texture2D(sampler,uvs-dudv);vec4 tex2=texture2D(sampler,uvs+dudv);\
+value+=currentScale*(vec2(unpackHalf(tex1.xy),unpackHalf(tex1.zw))+vec2(unpackHalf(tex2.xy),unpackHalf(tex2.zw)));}\
+float correction=1.0/sqrt_value-2.0*sum;\
+vec4 tt=texture2D(sampler,uvs);value+=vec2(unpackHalf(tt.xy),unpackHalf(tt.zw))*correction;vec2 ret=value*sqrt_value;\
+gl_FragColor=vec4(packHalf(ret.x),packHalf(ret.y));\
+}";
+
+					scene.blurShadow = sys.createShader("attribute vec3 position;varying vec2 uvs;\n\
+void main(){gl_Position=vec4(position,1.0);uvs=(position.xy*0.5+0.5);}",ffs,["position"], ["resolution", "direction", "sampler"]);
+				} else {
+					shadow.shadowMapFunction = "float moment1 = z;float moment2 = moment1 * moment1;\
+float dx = dFdx(moment1);float dy = dFdy(moment1);gl_FragColor = vec4(moment1,moment2+0.25*(dx*dx+dy*dy),0,1);";
+					shadow.generalShaderFunction = "vec4 sam=texture2D(sm,uu.xy);vec2 moments=sam.xy;\
+float p = smoothstep(uu.z-bias, uu.z, moments.x);\
+float variance = moments.y-moments.x * moments.x;\
+float d = uu.z-moments.x;\
+float p_max = linstep(0.2,1.0,variance/(variance+d*d));\
+return max(minValue,max(p, p_max));\
+";
+					scene.blurShadow = sys.createShader("attribute vec3 position;varying vec2 uvs;\n\
+void main(){gl_Position=vec4(position,1.0);uvs=(position.xy*0.5+0.5);}",
+	"#define INV_SQRT_2PI_X3 1.1968268412042980338198381798031\nprecision highp float;uniform sampler2D sampler;uniform vec2 direction,resolution;varying vec2 uvs;\
+const float r=" + so.blurScale + ".0;\nvoid main(){float exp_value=-4.5/r/r;float sqrt_value=INV_SQRT_2PI_X3/r;float sum=0.0;\
+vec4 value=vec4(0.0);for(float x=1.0;x<=r;x++){float currentScale=exp(exp_value*x*x);sum+=currentScale;\
+vec2 dudv=direction/resolution*x;value+=currentScale*(texture2D(sampler,uvs-dudv)+texture2D(sampler,uvs+dudv));}\
+float correction=1.0/sqrt_value-2.0*sum;value+=texture2D(sampler,uvs)*correction;gl_FragColor=value*sqrt_value;}",
+	["position"], ["resolution", "direction", "sampler"]);
+				}
+			}; break;
+		}
 		scene._allMaterials.forEach(function (material, n) {
 			var preLightCode = "";
 			var uniformString = "";
@@ -1547,37 +1836,38 @@ struct LightDirectionStruct_system\n\
 			var fs = "#extension GL_OES_standard_derivatives : enable\n\
 " + lightConstants + "precision highp float;varying vec3 vNormal,vLightPos;varying vec2 uvs;uniform vec3 cameraPosition;uniform mat4 NormalMat;varying vec4 absolutePosition;vec4 emissionParamether=vec4(0.0);\n\
 " + uniformString + "\n\n\n" + codeUniformsShadowMap + lightStructure + "\n\
-" + shaderFunctions + "\n\
 float unpackHalf(vec2 color)\
 {\
 return color.x + (color.y / 255.0);\
-}\nfloat linstep(float low, float high, float v){\
+}\n\n\n\
+float linstep(float low, float high, float v){\
 return clamp((v-low)/(high-low),0.0,1.0);\
-}\nfloat ChebychevInequality(vec2 moments, float compare, float bias)\
-{\
-float p = smoothstep(compare-bias, compare, moments.x);\
-float variance = moments.y-moments.x * moments.x;\
-float d = compare-moments.x;\
-float p_max = linstep(0.2,1.0,variance/(variance+d*d));\
-return max(0.3,max(p, p_max));\
-}\nfloat computeShadow(mat4 data,sampler2D shadowmapdata,float bias){\
-vec4 u=data*absolutePosition;vec3 uu=u.xyz/u.w;uu=uu*0.5+0.5;\
-if(uu.x<0.||uu.x>1.0||uu.y<0.||uu.y>1.0||uu.z>=1.0){return 1.0;}\
-vec4 m=texture2D(shadowmapdata,uu.xy);\
-vec2 moments=vec2(unpackHalf(m.xy),unpackHalf(m.zw));\
-return ChebychevInequality(moments,uu.z,bias);}\n\
+}float computeShadow(mat4 projMat, sampler2D sm, float bias, float normalBias, float minValue,vec3 lightPos){\n\
+vec3 wPos = absolutePosition.xyz + vNormal * normalBias * clamp(dot(vNormal, lightPos), 0.0, 1.0);\n\
+vec4 u=projMat*vec4(wPos,1.0);vec3 uu=u.xyz/u.w;uu=uu*0.5+0.5;\n\
+if(uu.x<0.001||uu.x>0.999||uu.y<0.001||uu.y>0.999||uu.z>=0.999){return 1.0;}\n\
+" + shadow.generalShaderFunction + "\n\
+\
+}\n\n\n\
+" + shaderFunctions + "\n\
 void main(){\n\
-	float shadowParam=1.0;\n\
+	float dv=gl_FragCoord.z/gl_FragCoord.w;\n\
 	for(int i=0;i<DIRECTION_LIGHT;i++)\n\
 	{\n\
 		vec3 lightPos=directionLight.normalizedVector[i];\n\
 		vec4 lightColor=directionLight.color[i];\n\
-" + preLightCode + "\n\
+		float shadowCoef=1.0;\n\
+		"+ shadowMapSplit +"\n\
+	" + preLightCode + "\n\
 		\n\
-		shadowParam*=computeShadow(shadowMapMatrix_[i*3+0],shadowMap_[i*3+0],shadowMapBias_[i]);\n\
+		/*vec4 u=shadowMapMatrix_[3]*absolutePosition;vec3 uu=u.xyz/u.w;uu=uu*0.5+0.5;\n\
+		diffuseParamether=texture2D(shadowMap_[3],uu.xy);*/\n\
 	}\n\
 	gl_FragColor=" + material[material.length - 1].sys.code + ";\n\
-	gl_FragColor.xyz*=shadowParam;gl_FragColor.xyz+=emissionParamether.xyz;\n\
+	gl_FragColor.xyz+=emissionParamether.xyz;\
+	/*const int sc=2;\
+	const int sp=1;const int sm=0;\
+	gl_FragColor.xyz=vec3(computeShadow(shadowMapMatrix_[sm*sc+sp],shadowMap_[sm*sc+sp],0.001,0.0,0.05,vec3(0.1)))*vec3(0.75);*/\
 }";
 			scene._shaders["Shader_" + n] = sys.createShader(vs, fs, ["position", "normal", "uv"], alluniforms);
 			//console.log(fs)
@@ -1596,45 +1886,15 @@ void main(){\n\
 	u=gl_Position;\n\
 }";
 		var s_fs = "#extension GL_OES_standard_derivatives : enable\nprecision highp float;varying vec4 u;\n\
-vec2 packHalf(float depth){\n\
-const vec2 bitOffset = vec2(1.0 / 255., 0.);\n\
-vec2 color = vec2(depth, fract(depth * 255.));\n\
-return color - (color.yy * bitOffset);\n\
-}\n\
+vec2 packHalf(float depth){const vec2 bitOffset = vec2(1.0 / 255., 0.);\
+vec2 color = vec2(depth, fract(depth * 255.));return color - (color.yy * bitOffset);}\
 void main()\n\
-{vec3 uz=u.xyz/u.w;float z=uz.z*0.5+0.5;\n\
-float moment1 = z;\n\
-float moment2 = moment1 * moment1;\n\
-float dx = dFdx(moment1);\n\
-float dy = dFdy(moment1);\n\
-gl_FragColor = vec4(packHalf(moment1),packHalf(moment2+0.25*(dx*dx+dy*dy)));\n\
-/*gl_FragColor = vec4(moment1,moment2+0.25*(dx*dx+dy*dy),0,1)*/;\
-}";
+{vec3 uz=u.xyz/u.w;float z=uz.z*0.5+0.5;"+shadow.shadowMapFunction+"}";
 		scene._shaders["ShadowShader"] = sys.createShader(s_vs, s_fs, ["position"], ["CameraMat", "MoveMat"]);
-
 	};
 	sys.resultShader = sys.createShader("attribute vec3 position;varying vec2 uvs;\n\
 void main(){gl_Position=vec4(position,1.0);uvs=position.xy*0.5+0.5;}", "precision highp float;uniform sampler2D sampler;varying vec2 uvs;void main(){gl_FragColor=texture2D(sampler,uvs);}",
 ["position"], ["resolution", "inverse_resolution", "sampler"]);
-	sys.blurShadow = sys.createShader("attribute vec3 position;varying vec2 uvs;\n\
-void main(){gl_Position=vec4(position,1.0);uvs=(position.xy*0.5+0.5);}",
-"precision highp float;uniform sampler2D sampler;uniform vec2 direction,resolution;varying vec2 uvs;\
-float unpackHalf(vec2 color)\
-{\
-return color.x + (color.y / 255.0);\
-}vec2 packHalf(float depth){\
-const vec2 bitOffset = vec2(1.0 / 255., 0.);\
-vec2 color = vec2(depth, fract(depth * 255.));\
-return color - (color.yy * bitOffset);\
-}const float r=4.0;void main(){float totalScale=1.0+r;\
-vec4 preVal=texture2D(sampler,uvs); vec2 value=vec2(unpackHalf(preVal.xy),unpackHalf(preVal.zw))*totalScale;\
-vec4 tex1=vec4(0.0); vec4 tex2=vec4(0.0);\
-for(float x=1.0;x<=r;x++)\
-{vec2 dudv=direction/resolution*x;float scale=1.0+r-x;\
-tex1=texture2D(sampler,uvs-dudv);tex2=texture2D(sampler,uvs+dudv);\
-value+=scale*(vec2(unpackHalf(tex1.xy),unpackHalf(tex1.zw))+vec2(unpackHalf(tex2.xy),unpackHalf(tex2.zw)));}\
-gl_FragColor=vec4(packHalf(value.x/totalScale/totalScale),packHalf(value.y/totalScale/totalScale));}", ["position"], ["resolution", "direction", "sampler"]);
-
 	this.getJson = function (url, callback) {
 		var xhr = new XMLHttpRequest();
 		xhr.open("GET", url, true);
@@ -1676,5 +1936,4 @@ gl_FragColor=vec4(packHalf(value.x/totalScale/totalScale),packHalf(value.y/total
 		newFB.unbind();
 		prog.disableAllAttributes();
 	};
-
 }

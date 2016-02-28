@@ -1,4 +1,3 @@
 # webgl
-StarLord mask webgl demo<br />
-Shadow map texture 1024 px-<a href="http://toly19.github.io/webgl/index-1024.html" target="_blank">index-1024.html</a><br />
-Shadow map texture 2048 px-<a href="http://toly19.github.io/webgl/index-2048.html" target="_blank">index-2048.html</a><br />
+StarLord mask webgl <a href="http://toly19.github.io/webgl/index.html" target="_blank">demo</a><br />
+click 1 and 2 on keyboard
